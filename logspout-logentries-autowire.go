@@ -2,15 +2,15 @@
 package logspout
 
 import (
-//    "errors"
+    "crypto/tls"
     "encoding/json"
     "github.com/fsouza/go-dockerclient"
     "github.com/gliderlabs/logspout/router"
-    "github.com/bsphere/le_go" 
-    // "fmt"
     "io/ioutil"
     "net/http"
     "time"
+    "fmt"
+    "errors"
 )
 
 type LeaObj struct {
@@ -68,7 +68,7 @@ type LogentriesMessage struct {
 
 func (a *LeaObj) Stream(logstream chan *router.Message) {
 
-  connMap := make(map[string]*le_go.Logger)
+  logger := NewLogger()
 
   for m := range logstream {
 
@@ -90,16 +90,78 @@ func (a *LeaObj) Stream(logstream chan *router.Message) {
       panic(jsonerr)
     }
 
-    if connMap[token] == nil{
-      var err error
-      connMap[token], err = le_go.Connect(token)
+    msg_to_send := []byte(token + " " + string(jsonPayload) + "\n")
+    //msg_to_send = []byte(msg_to_send)
+
+    // msg_to_send := append([]byte(token), byte(' '))//, jsonPayload...)
+    // msg_to_send = append(msg_to_send, jsonPayload...)
+    // msg_to_send = append(msg_to_send, '\n')
+    logger.Write(&msg_to_send)
+
+  }
+
+}
+
+type Logger struct {
+  conn           *tls.Conn
+  messageChannel chan *[]byte
+}
+
+func NewLogger() *Logger {
+  l := Logger{
+    messageChannel: make(chan *[]byte, 1000),
+  }
+  go l.handleMessages()
+  return &l
+}
+
+func (l *Logger) handleMessages() {
+  const defaultBackoff = 100 * time.Millisecond
+  const maxBackoff = 5 * time.Second
+  nextBackoff := defaultBackoff
+
+  var conn *tls.Conn
+  var err error
+  for {
+    msg := <-l.messageChannel
+    for {
+      if conn == nil {
+        conn, err = tls.Dial("tcp", "data.logentries.com:443", &tls.Config{})
         if err != nil {
-          panic(err)
+          fmt.Println("open failed, backing off", nextBackoff, err)
+          time.Sleep(nextBackoff)
+          nextBackoff *= 2
+          if nextBackoff > maxBackoff {
+            nextBackoff = maxBackoff
+          }
+          continue
+        } else {
+          nextBackoff = defaultBackoff
         }
+      }
+      if _, err := conn.Write(*msg); err != nil {
+        conn = nil
+        fmt.Println("write failed, backing off", nextBackoff, err)
+        time.Sleep(nextBackoff)
+        nextBackoff *= 2
+        if nextBackoff > maxBackoff {
+          nextBackoff = maxBackoff
+        }
+        continue
+      } else {
+        nextBackoff = defaultBackoff
+      }
+      break
     }
+  }
+}
 
-    go connMap[token].Println(string(jsonPayload))
-
+func (l *Logger) Write(data *[]byte) error {
+  select {
+  case l.messageChannel <- data:
+    return nil
+  default:
+    return errors.New("message buffer full, dropping message")
   }
 
 }
