@@ -98,7 +98,7 @@ func (a *LeaObj) Stream(logstream chan *router.Message) {
         }
     }
 
-    connMap[token].Println(string(jsonPayload))
+    go connMap[token].Println(string(jsonPayload))
 
   }
 
