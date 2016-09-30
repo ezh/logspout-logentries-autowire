@@ -19,6 +19,7 @@ type LeaObj struct {
 
 var DockerHost string
 var InstanceID string
+var DefaultToken string
 
 func init() {
   router.AdapterFactories.Register(LogentriesAutowire, "logentriesautowire")
@@ -48,6 +49,8 @@ func init() {
 
 func LogentriesAutowire (route *router.Route) (router.LogAdapter, error)  {
 
+  DefaultToken = route.Address
+
   return &LeaObj{
     route:         route,
   }, nil
@@ -74,7 +77,7 @@ func (a *LeaObj) Stream(logstream chan *router.Message) {
 
     token := m.Container.Config.Labels["logentries.token"]
     if token == "" {
-      continue
+      token = DefaultToken
     }
 
     containerID := m.Container.Config.Hostname
@@ -91,11 +94,6 @@ func (a *LeaObj) Stream(logstream chan *router.Message) {
     }
 
     msg_to_send := []byte(token + " " + string(jsonPayload) + "\n")
-    //msg_to_send = []byte(msg_to_send)
-
-    // msg_to_send := append([]byte(token), byte(' '))//, jsonPayload...)
-    // msg_to_send = append(msg_to_send, jsonPayload...)
-    // msg_to_send = append(msg_to_send, '\n')
     logger.Write(&msg_to_send)
 
   }

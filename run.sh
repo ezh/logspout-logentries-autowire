@@ -9,6 +9,6 @@ go get -v
 go build -ldflags "-X main.Version=1" -o /bin/logspout
 if [ $? -eq 0 ]
 then
-    /bin/logspout  logentriesautowire://
+    /bin/logspout  logentriesautowire://63deef6e-5328-48d9-9ae3-84928d6ada66
 fi
 
