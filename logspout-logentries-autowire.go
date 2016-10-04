@@ -62,10 +62,10 @@ type LogentriesMessage struct {
   Image      string                 `json:"image,omitempty"`
   Created    string                 `json:"created,omitempty"`
   Status     string                 `json:"status,omitempty"`
-  Node       string                  `json:"node,omitempty"`
+  Node       string                 `json:"node,omitempty"`
   InstanceId string                 `json:"instanceid,omitempty"`
   Labels     map[string]string      `json:"labels,omitempty"`
-  Line       string                 `json:"line,omitempty"`
+  Line       map[string]interface{} `json:"line,omitempty"`
 }
 
 
@@ -86,7 +86,15 @@ func (a *LeaObj) Stream(logstream chan *router.Message) {
     labels := m.Container.Config.Labels
     status := m.Container.State.Status
 
-    payload := LogentriesMessage{Id: containerID, Image: imageID, Created: created.String(), Status: status , Node: DockerHost, InstanceId: InstanceID, Labels: labels, Line: m.Data}
+    var logline map[string]interface{}
+    err := json.Unmarshal([]byte(m.Data), &logline)
+
+    if err != nil{
+      logline = make(map[string]interface{})
+      logline["message"] = m.Data
+    }
+
+    payload := LogentriesMessage{Id: containerID, Image: imageID, Created: created.String(), Status: status , Node: DockerHost, InstanceId: InstanceID, Labels: labels, Line: logline}
     jsonPayload, jsonerr := json.Marshal(payload)
 
     if jsonerr != nil {
